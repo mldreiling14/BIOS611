@@ -1,4 +1,2 @@
-Volate Trace Project
-=============================================
+# Hi, this is my 611 Data Science Project. More to come.
 
-This repository is going to contain my analysis of some simulated voltage traced.
