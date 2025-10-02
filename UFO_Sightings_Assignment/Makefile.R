@@ -1,4 +1,0 @@
-target: dependency1 dependency2 ...
-recipe1
-recipe2
-
