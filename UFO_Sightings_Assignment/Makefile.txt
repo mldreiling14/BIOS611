@@ -1,0 +1,5 @@
+data_derived/US_shape_table.csv: nuforc_sightings.csv shape_table.R
+  	Rscript shape_table.R
+  	
+images/pca_shapes_scree.png: US_shape_table.csv pca_shape.R
+    Rscript pca.R

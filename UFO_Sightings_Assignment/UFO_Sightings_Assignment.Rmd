@@ -1,0 +1,291 @@
+---
+title: "UFO_Sightings_Assignment"
+output:
+  pdf_document: default
+  html_document: default
+date: "2025-10-02"
+---
+
+```{r}
+library(tidyverse)
+library(tidytext)
+library(stopwords)
+library(wordcloud)
+library(RColorBrewer)
+library(ggrepel)
+
+data <- read.csv('nuforc_sightings.csv')
+
+US_filter <- function(x){
+  x |> mutate(
+    country = str_to_upper(country),
+    state = str_to_upper(state),
+    shape = str_to_lower(str_trim(shape)), 
+    shape = na_if(shape, "")
+  ) |>
+    filter(country == "USA", !is.na(state), nchar(state) == 2)
+}    
+
+US_data <- US_filter(data)
+valid_states <- state.abb
+
+US_filtered <- US_data %>% 
+  filter(state %in% valid_states) %>%
+  drop_na(shape) %>%
+  filter(!(shape %in% c("unknown", "other"))) %>%
+  count(state, shape) %>%
+  pivot_wider(
+      names_from = shape,
+      values_from = n,
+      values_fill = 0) %>%
+  write_csv("derived_data/US_shape_table.csv")
+US_filtered
+```
+
+```{r}
+US_data |>
+    filter(!is.na(shape)) |>
+    filter(!(shape %in% c("unknown","other","na","?","unspecified","not sure"))) |>
+    distinct(shape)|>
+    nrow() 
+```
+
+There are 22 distinct known shapes after cleaning.
+
+```{r}
+US_data |>
+    filter(shape == "circle") |>
+    count(state) |>
+    slice_max(order_by = n, n = 1)
+```
+
+California has the most reports of circle sightings.
+
+```{r}
+pca_data <- US_filtered |>
+  column_to_rownames("state") |>
+  as.matrix()
+
+pca_data <- US_filtered |>
+  column_to_rownames("state") %>%
+  as.matrix()
+
+normalize_rows <- function(x) {
+  rs <- rowSums(x, na.rm = TRUE)
+  rs[rs == 0] <- 1e-9
+  sweep(x, 1, rs, "/")
+}
+
+props_mat <- normalize_rows(pca_data)
+pca_shapes <- prcomp(props_mat)
+pca_shapes
+```
+
+After normalizing each state’s UFO shape counts to proportions, I conducted a Principal Components Analysis (PCA) to uncover the dominant patterns of variation in UFO reports across U.S. states. The scree plot shows that the first two principal components (PCs) together account for nearly 60% of the total variance (PC1 ≈ 40%, PC2 ≈ 18%). An elbow occurs after PC2, suggesting that most of the structure in the data can be captured with two dimensions.
+
+The PC1–PC2 scatterplot highlights how states group according to their relative mix of reported UFO shapes. States close together in the plot have similar UFO shape distributions, while outliers on the axes reflect distinctive reporting patterns.
+
+```{r}
+var <- pca_shapes$sdev^2 / sum(pca_shapes$sdev^2)
+
+scree <- tibble(PC = seq_along(var), var = var)
+
+g <- ggplot(scree, aes(PC, var)) + 
+  geom_point()
+ggsave("images/pca_shapes_scree.png", g)
+g
+```
+
+```{r}
+scores <- as_tibble(pca_shapes$x, rownames = "state")
+g2 <- ggplot(scores, aes(PC1, PC2, label = state)) +
+  geom_point()
+ggsave("images/pca_shapes_pc12.png", g2)
+g2
+```
+
+### **Interpretation of Loadings**
+
+The loadings from the PCA provide insight into which UFO shapes are driving the variation across states. For the first principal component (PC1), the strongest loading is Light with a large negative weight (−0.81), while Triangle (+0.50) and Disk (+0.19) have positive weights. This means that light sightings dominate states with low PC1 scores, whereas states with high PC1 scores tend to have relatively more triangular and disk-shaped sightings. PC1, therefore, reflects a clear contrast between “light-heavy” states and those where geometric shapes are more common.
+
+The second principal component (PC2) is characterized by positive loadings for Triangle (+0.70) and Light (+0.41), and a negative loading for Fireball (−0.33). In this case, states with higher PC2 scores are associated with greater proportions of triangle and light sightings, while those with lower PC2 scores report more fireballs. PC2 thus captures an axis that separates states where triangles and lights dominate from those where fireball sightings are relatively more frequent.
+
+When viewed together on the PC1–PC2 scatterplot, these components show how states cluster based on their UFO shape distributions. States falling to the left on PC1 are those with a high share of light sightings, while those on the right emphasize triangles and disks. States higher on PC2 lean toward triangle and light sightings, whereas those lower on PC2 stand out for fireball reports. This visualization makes the contrasts identified by the loadings tangible, highlighting regional differences in the character of UFO sightings across the U.S.
+
+```{r}
+loadings <- as_tibble(pca_shapes$rotation, rownames = "shape")
+write_csv(loadings, "derived_data/pca_shapes_loadings.csv")
+
+top_pc1 <- loadings |>
+  arrange(desc(abs(PC1))) |>
+  slice_head(n=3)
+top_pc1
+```
+
+“light” (negative), “triangle”, and “disk” dominate PC1.
+
+```{r}
+top_pc2 <- loadings |>
+  arrange(desc(abs(PC2))) |>
+  slice_head(n=3)
+top_pc2
+```
+
+“triangle”, “light”, and “fireball” drive PC2.
+
+```{r}
+summaries_clean <- US_data %>%
+  filter(state %in% valid_states) %>%
+  mutate(
+    summary = str_to_lower(summary),
+    summary = str_replace_all(summary, "[^ -~]", " "),
+    summary = str_squish(summary)
+  ) %>%
+  select(state, summary) %>%
+  unnest_tokens(word, summary) %>%
+  filter(str_detect(word, "^[a-z]+$"))
+word_counts <- summaries_clean %>% count(word, sort = TRUE)
+word_counts
+```
+
+```{r}
+g3 <- word_counts %>%
+  slice_max(n, n = 20) %>%
+  ggplot(aes(x = reorder(word, n), y = n)) +
+  geom_col() + coord_flip() +
+  labs(title = "Top 20 Words (Before Stopword Removal)", x = "Word", y = "Count")
+ggsave("images/top_words_before.png", g3)
+g3
+```
+
+Dominated by generic English words, not UFO-specific.
+
+```{r}
+png("images/wordcloud_before.png", width = 800, height = 600)
+set.seed(123)
+wordcloud(words = word_counts$word, freq = word_counts$n,
+          max.words = 100, colors = brewer.pal(8, "Dark2"))
+dev.off()
+```
+
+```{r}
+word_counts_nostop <- summaries_clean %>%
+  filter(!(word %in% stopwords("en"))) %>%
+  count(word, sort = TRUE)
+g4 <- word_counts_nostop %>%
+  slice_max(n, n = 20) %>%
+  ggplot(aes(x = reorder(word, n), y = n)) +
+  geom_col() + coord_flip() +
+  labs(title = "Top 20 Words (After Stopword Removal)", x = "Word", y = "Count")
+ggsave("images/top_words_after.png", g4)
+g4
+```
+
+More domain-relevant words emerge (light, lights, sky, object, bright).
+
+```{r}
+png("images/wordcloud_after.png", width = 800, height = 600)
+set.seed(123)
+wordcloud(words = word_counts_nostop$word, freq = word_counts_nostop$n,
+          max.words = 100, colors = brewer.pal(8, "Dark2"))
+dev.off()
+```
+
+Before removing stopwords, the most frequent words in the summaries were dominated by common English filler words (e.g., “the,” “and,” “to”), which provided little insight into the nature of UFO reports. After removing stopwords, however, a much clearer picture emerged: words such as light, lights, sky, object, and bright rose to prominence, along with color descriptors like white and motion-related terms like moving. The histograms and word clouds highlight this shift from generic to domain-relevant language. These results suggest that most UFO reports emphasize visual observations, particularly of bright lights in the sky, and the descriptive vocabulary supports the patterns already observed in the shape data. Together, these findings reinforce the idea that reports are strongly centered on luminous, often geometric phenomena.
+
+```{r}
+dictionary <- word_counts_nostop %>%
+  slice_max(n, n = 100) %>%
+  pull(word)
+write_csv(tibble(word = dictionary), "derived_data/dictionary_top100.csv")
+tokens_nostop <- US_data %>%
+  filter(state %in% valid_states) %>%
+  mutate(
+    summary = str_to_lower(summary),
+    summary = str_replace_all(summary, "[^ -~]", " "),
+    summary = str_squish(summary)
+  ) %>%
+  select(state, summary) %>%
+  unnest_tokens(word, summary) %>%
+  filter(str_detect(word, "^[a-z]+$"), nchar(word) >= 3) %>%
+  filter(!(word %in% stopwords("en")))
+tokens_nostop
+```
+
+```{r}
+vocab <- tokens_nostop %>%
+  count(word, sort = TRUE) %>%
+  slice_head(n = 100) %>%
+  pull(word)
+
+write_csv(tibble(word = vocab), "derived_data/dictionary_top100.csv")
+
+state_word_counts <- tokens_nostop %>%
+  semi_join(tibble(word = vocab), by = "word") %>%
+  count(state, word, name = "n")
+
+state_word_wide <- state_word_counts %>%
+  pivot_wider(names_from = word, values_from = n, values_fill = 0)
+write_csv(state_word_wide, "derived_data/state_word_counts.csv")
+
+M_words <- state_word_wide %>%
+  column_to_rownames("state") %>%
+  as.matrix()
+P_words <- normalize_rows(M_words)
+p_words <- prcomp(P_words, center = TRUE, scale. = TRUE)
+
+ve_w <- p_words$sdev^2 / sum(p_words$sdev^2)
+```
+
+```{r}
+g_sw <- tibble(PC = seq_along(ve_w), var = ve_w) %>%
+  ggplot(aes(PC, var)) +
+  geom_point() + geom_line()
+ggsave("images/pca_words_scree.png", g_sw, width = 7, height = 5, dpi = 150)
+g_sw
+```
+
+Similar pattern to shapes PCA; first 2–3 PCs capture main variation.
+
+```{r}
+g_pc <- as_tibble(p_words$x, rownames = "state") %>%
+  ggplot(aes(PC1, PC2, label = state)) +
+  geom_point() +
+  theme_minimal()
+ggsave("images/pca_words_pc12.png", g_pc, width = 7, height = 5, dpi = 150)
+g_pc
+```
+
+States group differently by textual description than by shape, but clusters echo light/triangle themes.
+
+```{r}
+word_loadings <- as_tibble(p_words$rotation, rownames = "word")
+write_csv(word_loadings, "derived_data/pca_words_loadings.csv")
+
+top_pc1_words <- word_loadings %>%
+  arrange(desc(abs(PC1))) %>% slice_head(n = 8)
+```
+
+“light”, “triangular”, “green”, “lights”, “triangle” — emphasizing brightness, geometry, and color.
+
+```{r}
+top_pc2_words <- word_loadings %>%
+  arrange(desc(abs(PC2))) %>% slice_head(n = 8)
+
+top_pc2_words
+```
+
+“bright”, “shaped”, “craft”, “black”, “yellow”, “orange” — terms describing intensity, structure, and color.
+
+```{r}
+cat("\nTop PC1 words (abs loadings):\n");print(top_pc1_words)
+```
+
+```{r}
+
+cat("\nTop PC2 words (abs loadings):\n");print(top_pc2_words)
+```
+
+Comparing this result with Task 2, we see interesting overlaps and divergences. In the shape-based PCA, the most influential categories were light, triangle, and disk. The word-based PCA confirms the dominance of light and triangle terminology, but it also adds additional descriptive layers (e.g., bright, craft, shaped, colors like green and black) that were not captured by the shape taxonomy. This indicates that while shapes provide a structured way of categorizing sightings, the narrative descriptions reveal richer variation, particularly around brightness, movement, and color.
+
+Taken together, the two PCA approaches suggest complementary insights. The shape-based PCA highlights a few dominant visual archetypes of sightings, while the word-based PCA uncovers additional dimensions in how people describe their experiences, such as intensity, structure, and perceived “craft-like” features. These results illustrate that combining structured categorical data (shapes) with unstructured text (summaries) yields a fuller understanding of patterns in UFO sighting reports.
