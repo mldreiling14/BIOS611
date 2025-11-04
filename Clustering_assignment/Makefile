@@ -2,9 +2,7 @@
 
 RSCRIPT = Rscript --vanilla
 
-.PHONY: all clean
-
-all: figures/task1_gap_results.png figures/task2_spectral_shells.png
+.PHONY: clean
 
 figures:
 	mkdir -p figures
