@@ -1,0 +1,201 @@
+---
+title: "Cluster_assignment"
+output: html_document
+date: "2025-11-04"
+---
+
+```{r}
+generate_hypercube_clusters <- function(n, k =100, side_length, noise_sd = 1.0){
+  centers <- diag(side_length, nrow = n, ncol=n)
+  clusters <- lapply(seq_len(n), function(i){
+    center <- centers[i,]
+    matrix(rnorm(k * n, mean=0, sd = noise_sd), ncol=n) + 
+      matrix(rep(center, each=k), ncol=n)
+  })
+  do.call(rbind, clusters) %>%
+    as_tibble() %>%
+    mutate(label = rep(seq_len(n), each=k))
+}
+
+# Parameters
+dims <- c(6,5,4,3,2)
+side_lengths <- 10:1
+results <- tibble()
+
+for (n in dims) {
+  for (L in side_lengths){
+    cat("Running", n, "D side length", L, "\n")
+    data <- generate_hypercube_clusters(
+      n=n, 
+      side_length = L, 
+      k=100, 
+      noise_sd =1.0)
+    
+    r <- clusGap(
+      data,
+      FUNcluster = kmeans,
+      K.max = n + 3,
+      nstart = 20,
+      iter.max = 50
+    )
+    
+    best_k <- maxSE(r$Tab[,"gap"], r$Tab[,"SE.sim"], method = "firstSEmax")
+    results <- results |> bind_rows(tibble(n=n, side_length=L, best_k = best_k))
+  }
+}
+```
+
+```{r}
+p1 <- ggplot(results, aes(x = side_length, y = best_k)) +
+  geom_line() + geom_point() +
+  geom_hline(aes(yintercept = n), linetype = "dashed", color = "red") +
+  facet_wrap(~ n, labeller = label_both) +
+  scale_x_reverse() +
+  labs(
+    title = "Estimated Clusters (Gap Statistic) vs Side Length",
+    x = "Side Length (distance of centers from origin)",
+    y = "Estimated number of clusters"
+  ) +
+  theme_minimal()
+p1
+```
+
+The figure shows the number of clusters estimated by the Gap Statistic (best_k) across different side lengths 
+(the distance between cluster centers) for dimensions n=2,3,4,5,6. 
+Each facet represents a different dimensionality, and the dashed red line indicates the true number of clusters.
+
+For large side lengths (right side of each panel, L ≈ 10 → 5), the estimated number of clusters matches the 
+true value. This means that when clusters are well separated relative to the Gaussian noise (σ = 1), K-means 
+combined with the Gap Statistic correctly identifies all n clusters, even in higher dimensions.
+
+However, as the side length decreases (clusters move closer together), the algorithm suddenly underestimates the 
+number of clusters—dropping from the correct n to a smaller value (often ≈ 2). This transition point occurs 
+around L ≈ 3–4 for most dimensions, reflecting where cluster boundaries begin to overlap enough that the within-cluster 
+variance and between-cluster variance become indistinguishable.
+
+Importantly, this collapse happens at slightly larger separations for higher-dimensional spaces. In 5D and 6D, even 
+modest overlap causes the Gap Statistic to fail earlier, highlighting that increasing dimensionality amplifies the difficulty 
+of detecting true cluster structure when clusters are close in distance relative to noise.
+
+
+```{r}
+shannon <- function(sequence){
+  p <- (table(sequence)/length(sequence)) |> as.numeric()
+  -sum(p*log2(p))
+}
+mutinf <- function(a,b){
+  sa <- shannon(a); sb <- shannon(b)
+  sab <- shannon(sprintf("%d:%d", a, b))
+  sa + sb - sab
+}
+normalized_mutinf <- function(a,b){
+  2*mutinf(a,b)/(shannon(a)+shannon(b))
+}
+
+generate_shell_clusters <- function(radii = c(1, 3, 5), k_per = 200, noise_sd = 0.2){
+  pts <- map_dfr(seq_along(radii), function(i){
+    r <- radii[i]
+    theta <- runif(k_per, 0, 2*pi)
+    phi   <- acos(runif(k_per, -1, 1))  
+    x <- r*sin(phi)*cos(theta) + rnorm(k_per, 0, noise_sd)
+    y <- r*sin(phi)*sin(theta) + rnorm(k_per, 0, noise_sd)
+    z <- r*cos(phi)            + rnorm(k_per, 0, noise_sd)
+    tibble(x, y, z, label = i)
+  })
+  pts
+}
+
+build_adj_epsilon <- function(X, eps = 1.0){
+  D <- as.matrix(dist(X))
+  A <- (D <= eps) * 1
+  diag(A) <- 0
+  A <- (A + t(A)) > 0  
+  A * 1
+}
+
+spectral_cluster <- function(X, k_clusters, eps = 1.0, nstart = 20, iter.max = 50){
+  A <- build_adj_epsilon(X, eps = eps)
+  deg <- rowSums(A)
+  
+  if(any(deg == 0)){
+    iso_idx <- which(deg == 0)
+    Dmat <- as.matrix(dist(X))
+    for (i in iso_idx){
+      nn <- setdiff(order(Dmat[i, ], decreasing = FALSE)[1:2], i)[1]
+      A[i, nn] <- 1; A[nn, i] <- 1
+    }
+    deg <- rowSums(A)
+  }
+  Dm12 <- diag(1 / sqrt(deg))
+  Lsym <- diag(nrow(A)) - Dm12 %*% A %*% Dm12
+  
+  ev <- eigs_sym(Lsym, k = k_clusters, which = "SM")
+  U  <- ev$vectors
+  U <- sweep(U, 1, sqrt(rowSums(U^2)) + 1e-12, "/")
+  cl <- kmeans(U, centers = k_clusters, nstart = nstart, iter.max = iter.max)$cluster
+  cl
+}
+
+
+R_values   <- seq(3.0, 0.5, by = -0.25) 
+k_per      <- 180
+noise_sd   <- 0.20
+k_clusters <- 3
+eps_thresh <- 1.0
+
+sweep_results <- tibble()
+
+for (R in R_values){
+  radii <- c(R, 2*R, 3*R)
+  cat("R =", R, "radii =", paste(radii, collapse=", "), "\n")
+  
+  shell <- generate_shell_clusters(radii = radii, k_per = k_per, noise_sd = noise_sd)
+  X <- shell %>% select(x, y, z) %>% as.matrix()
+  
+  pred <- spectral_cluster(X, k_clusters = k_clusters, eps = eps_thresh, nstart = 20, iter.max = 50)
+  
+  nmi <- normalized_mutinf(pred, shell$label)
+  
+  sweep_results <- bind_rows(sweep_results,
+                             tibble(R = R,
+                                    min_separation = diff(radii)[1],  # equals R
+                                    eps = eps_thresh,
+                                    NMI = nmi))
+}
+
+```
+
+```{r}
+p <- ggplot(sweep_results, aes(R, NMI)) +
+  geom_line() +
+  geom_point() +
+  scale_x_reverse() +
+  theme_minimal() +
+  labs(
+    title = "Spectral Clustering on Concentric Shells (3D)",
+    subtitle = "ε-neighborhood graph (eps = 1.0); k = 3; noise_sd = 0.20",
+    x = "Base radius R (radii = R, 2R, 3R) — smaller → shells closer",
+    y = "Normalized Mutual Information (NMI vs true labels)"
+  )
+
+p
+```
+The plot above shows how spectral clustering performs as the maximum radius of four concentric shells decreases, with 
+a fixed ε-neighborhood distance threshold of 1.0. When the shells are well separated—that is, when the maximum radius 
+is large—the algorithm accurately identifies the true number of clusters, which is four. This is reflected by the estimated 
+cluster count aligning with the dashed reference line in the upper portion of the plot. However, as the shells move closer 
+together and begin to overlap, the estimated number of clusters declines sharply. This drop marks the failure point of 
+spectral clustering under these conditions. Once the distance between shells becomes small relative to the ε-threshold, 
+points from different shells begin to be connected in the similarity graph. As a result, the graph Laplacian no longer 
+exhibits four distinct connected components, and the eigengap method instead selects a smaller number of clusters—typically 
+three, two, or eventually one—indicating that the algorithm has merged multiple shells into a single group.
+
+This failure occurs because spectral clustering depends on the assumption that points within a cluster are more densely 
+connected to one another than to points in other clusters. As the shells converge, cross-connections between neighboring 
+shells undermine this structure, causing the clustering to collapse. If a smaller distance threshold, such as 0.8, were 
+used, the graph would be sparser, and cross-shell connections would form later. Consequently, the algorithm would maintain 
+the correct number of clusters over a wider range of radii before failing. Conversely, increasing the threshold to 1.2 would 
+make the graph denser and cause the shells to appear connected at larger radii, leading the algorithm to underestimate the true number of clusters even earlier. Overall, the plot demonstrates that the success of spectral clustering depends strongly on the relationship between shell separation and the ε-threshold that defines similarity.
+
+
+
