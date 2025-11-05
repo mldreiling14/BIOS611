@@ -1,5 +1,4 @@
 library(tidyverse)
-library(matlab)
 library(cluster)
 
 generate_hypercube_clusters <- function(n, k =100, side_length, noise_sd = 1.0){
@@ -9,8 +8,8 @@ generate_hypercube_clusters <- function(n, k =100, side_length, noise_sd = 1.0){
     matrix(rnorm(k * n, mean=0, sd = noise_sd), ncol=n) + 
       matrix(rep(center, each=k), ncol=n)
   })
-  do.call(rbind, clusters) %>%
-    as_tibble() %>%
+  do.call(rbind, clusters) |>
+    as_tibble() |>
     mutate(label = rep(seq_len(n), each=k))
 }
 
@@ -22,14 +21,15 @@ results <- tibble()
 for (n in dims) {
   for (L in side_lengths){
     cat("Running", n, "D side length", L, "\n")
-    data <- generate_hypercube_clusters(
+    data_with_label <- generate_hypercube_clusters(
       n=n, 
       side_length = L, 
       k=100, 
       noise_sd =1.0)
-    
+  
+  data_numeric <- data_with_label |> select(-label)
     r <- clusGap(
-      data,
+      data_numeric,
       FUNcluster = kmeans,
       K.max = n + 3,
       nstart = 20,

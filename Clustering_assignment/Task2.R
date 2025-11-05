@@ -1,7 +1,7 @@
-install.packages('rdist')
-install.packages('RSpectra')
 library(rdist)
 library(RSpectra)
+library(tidyverse)
+
 
 
 shannon <- function(sequence){
@@ -103,4 +103,4 @@ p <- ggplot(sweep_results, aes(R, NMI)) +
 p
 
 dir.create("figures", showWarnings = FALSE)
- ggsave("figures/task2_spectral_shells.png", p, width = 8, height = 4, dpi = 200)
+ggsave("figures/task2_spectral_shells.png", p, width = 8, height = 4, dpi = 200)
