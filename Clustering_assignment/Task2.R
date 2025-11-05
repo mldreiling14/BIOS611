@@ -71,7 +71,7 @@ eps_thresh <- 1.0
 sweep_results <- tibble()
 
 for (R in R_values){
-  radii <- c(R, 2*R, 3*R)
+  radii <- seq(from = 1, to = max_radius, length.out = 4)
   cat("R =", R, "radii =", paste(radii, collapse=", "), "\n")
   
   shell <- generate_shell_clusters(radii = radii, k_per = k_per, noise_sd = noise_sd)
