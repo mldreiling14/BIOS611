@@ -1,0 +1,9 @@
+This is the final project for BIOS611.
+How to run this container steps. 
+
+To run this container go to the directory the project
+  happens and type.... something along these lines
+  docker build -t project
+  docker run -v$(pwd):/home/rstudi/work
+  -p 8787:8787 
+  project

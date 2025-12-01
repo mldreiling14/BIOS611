@@ -1,0 +1,15 @@
+---
+title: "project"
+output: html_document
+date: "2025-12-01"
+---
+
+```{r}
+ 
+```
+
+
+```{r}
+
+```
+
