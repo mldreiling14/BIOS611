@@ -92,7 +92,9 @@ pcs <- as_tibble(pc_res$x) |>
 
 ![](figures/pca_life_expectancy.png)
 
-## K-Means Clustering To identify groups of counties with similar structural profiles, k-means clustering was performed on the first three principal components. Using the Gap Statistic to assess cluster fit across k = 1–10, the optimal number of clusters was estimated near k = 4, balancing interpretability and within-cluster cohesion. Although the gap curve suggested diminishing returns past k = 1, visual interpretability and separation of PC-space regions supported the selection of four clusters.
+## K-Means 
+
+Clustering To identify groups of counties with similar structural profiles, k-means clustering was performed on the first three principal components. Using the Gap Statistic to assess cluster fit across k = 1–10, the optimal number of clusters was estimated near k = 4, balancing interpretability and within-cluster cohesion. Although the gap curve suggested diminishing returns past k = 1, visual interpretability and separation of PC-space regions supported the selection of four clusters.
 
 ```{r}
 plot(pc_res, type = "l", main = "Scree Plot")
@@ -107,7 +109,11 @@ plot(gap)
 
 ### Principal Component-Based Clustering
 
-After determining a reasonably interpretable number of clusters (k = 4), k-means clustering was applied to the first three principal components. The resulting clusters reflect distinct combinations of socioeconomic conditions, health care access, and clinical burden. ![](figures/le_pca.png) This PCA scatterplot shows how counties group into four distinct regions of principal component space, representing different combinations of housing burden, poverty, clinical care access, and preventable hospitalizations. Counties form four partially separable groupings in PC1–PC2 space, suggesting meaningful structural differences. Clusters are not perfectly separable — as expected in social science data — but each cluster occupies a characteristic region of the PCA landscape. For example, Cluster 1 tends to lie in higher PC1/lower PC2 values (indicative of higher income and lower poverty), whereas Clusters 3 and 4 lie toward the negative end of PC1, consistent with greater socioeconomic disadvantage.
+After determining a reasonably interpretable number of clusters (k = 4), k-means clustering was applied to the first three principal components. The resulting clusters reflect distinct combinations of socioeconomic conditions, health care access, and clinical burden. 
+
+![](figures/le_pca.png) 
+
+This PCA scatterplot shows how counties group into four distinct regions of principal component space, representing different combinations of housing burden, poverty, clinical care access, and preventable hospitalizations. Counties form four partially separable groupings in PC1–PC2 space, suggesting meaningful structural differences. Clusters are not perfectly separable — as expected in social science data — but each cluster occupies a characteristic region of the PCA landscape. For example, Cluster 1 tends to lie in higher PC1/lower PC2 values (indicative of higher income and lower poverty), whereas Clusters 3 and 4 lie toward the negative end of PC1, consistent with greater socioeconomic disadvantage.
 
 To assess whether these structural clusters correspond to meaningful population health differences, life expectancy was compared across clusters.
 
@@ -142,7 +148,10 @@ Overall, states showed substantial variation in their county compositions. Some 
 
 This distribution analysis is not intended as a full geographic deep dive but rather as a descriptive extension of the clustering results, illustrating how structural health patterns manifest across U.S. states.
 
-![](figures/state_cluster_label_distribution_pct.png) #Next Steps and Opportunities for Further Analysis This project provides an initial exploration of how socioeconomic and clinical-care indicators cluster across U.S. counties and how these structural patterns relate to life expectancy. Several useful extensions could deepen this work:
+![](figures/state_cluster_label_distribution_pct.png) 
+
+#Next Steps and Opportunities for Further Analysis 
+This project provides an initial exploration of how socioeconomic and clinical-care indicators cluster across U.S. counties and how these structural patterns relate to life expectancy. Several useful extensions could deepen this work:
 
 1.  Incorporate Additional Predictors
 

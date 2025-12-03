@@ -24,8 +24,6 @@ X <- pca_dat |>
 
 pc_res <- prcomp(X, center = TRUE, scale. = TRUE)
 
-pc_res
-
 pcs <- pc_res$x |>
   as_tibble() |>
   mutate(
@@ -45,7 +43,5 @@ pca_plot <- ggplot(pcs, aes(PC1, PC2, color = life_expectancy_raw_value)) +
     title = "PCA Colored by Life Expectancy",
     color = "Life Expectancy"
   )
-
-pca_plot
 
 ggsave("figures/pca_life_expectancy.png", pca_plot, width = 7, height = 5, dpi = 300)

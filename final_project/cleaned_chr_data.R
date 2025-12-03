@@ -6,8 +6,6 @@ chr <- read_csv("source_data/county_health_rankings_2025.csv",
   slice(-1) |>
   clean_names()
 
-glimpse(chr)
-
 clean_numeric_column <- function(x) {
   x |>
     str_replace_all("[^0-9\\.\\-]", "") |>
