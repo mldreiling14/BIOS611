@@ -1,7 +1,3 @@
-install.packages('janitor')
-install.packages('readxl')
-install.packages('missForest')
-
 library('missForest')
 library('readxl')
 library('janitor')

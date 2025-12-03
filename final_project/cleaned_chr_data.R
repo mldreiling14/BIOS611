@@ -1,4 +1,3 @@
-install.packages('janitor')
 library('janitor')
 library('tidyverse')
 
@@ -6,6 +5,8 @@ chr <- read_csv("source_data/county_health_rankings_2025.csv",
                 show_col_types = FALSE) |> 
   slice(-1) |>
   clean_names()
+
+glimpse(chr)
 
 clean_numeric_column <- function(x) {
   x |>
@@ -28,7 +29,8 @@ drop_patterns <- c(
   "_black",
   "_hispanic",
   "_asian",
-  "_aian"
+  "_aian",
+  "_nhopi"
 )
 
 chr_clean <- chr |>

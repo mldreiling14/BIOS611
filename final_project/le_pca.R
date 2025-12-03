@@ -1,3 +1,5 @@
+library(tidyverse)
+library(cluster)
 chr_clean <- read_csv("derived_data/chr_clean_full.csv")
 
 pred_vars <- c(
@@ -10,11 +12,11 @@ pred_vars <- c(
   "preventable_hospital_stays_raw_value"
 )
 
-pca_dat <- chr_clean |>
-  select(
-    life_expectancy_raw_value,
-    all_of(pred_vars)
-  ) |>
+stopifnot(all(pred_vars %in% names(chr_clean)))
+stopifnot("life_expectancy_raw_value" %in% names(chr_clean))
+
+pca_dat <- chr_clean |> 
+  select(life_expectancy_raw_value, all_of(pred_vars)) |> 
   drop_na()
 
 X <- pca_dat |>
@@ -22,50 +24,28 @@ X <- pca_dat |>
 
 pc_res <- prcomp(X, center = TRUE, scale. = TRUE)
 
+pc_res
+
 pcs <- pc_res$x |>
   as_tibble() |>
   mutate(
     life_expectancy_raw_value = pca_dat$life_expectancy_raw_value
   )
 
-pcs
+pcs <- as_tibble(pc_res$x)
 
-pc_for_cluster <- pcs |>
-  select(PC1:PC3)
+pcs$life_expectancy_raw_value <- pca_dat$life_expectancy_raw_value
 
-km <- kmeans(pc_for_cluster, centers = 4, nstart = 25)
 
-pcs <- pcs |>
-  mutate(cluster = factor(km$cluster))
-
-le_pca <- ggplot(pcs, aes(PC1, PC2, color = cluster)) +
-  geom_point(alpha = 0.7) +
+pca_plot <- ggplot(pcs, aes(PC1, PC2, color = life_expectancy_raw_value)) +
+  geom_point(alpha = 0.6) +
+  scale_color_viridis_c(option = "plasma") +
   theme_minimal() +
   labs(
-    title = "Clusters of Counties by Housing, SDOH, and Clinical Care (PC Space)",
-    color = "Cluster"
+    title = "PCA Colored by Life Expectancy",
+    color = "Life Expectancy"
   )
 
-ggsave("figures/le_pca.png", le_pca, width = 7, height = 5, dpi = 300)
+pca_plot
 
-
-pcs |>
-  group_by(cluster) |>
-  summarise(
-    n = n(),
-    mean_le = mean(life_expectancy_raw_value, na.rm = TRUE),
-    sd_le   = sd(life_expectancy_raw_value, na.rm = TRUE)
-  )
-
-le_boxplot <- ggplot(pcs, aes(cluster, life_expectancy_raw_value, fill = cluster)) +
-  geom_boxplot() +
-  theme_minimal() +
-  labs(
-    title = "Life Expectancy by Cluster",
-    x = "Cluster",
-    y = "Life expectancy (years)"
-  )
-
-ggsave("figures/le_pca_boxplot.png", le_boxplot, width = 7, height = 5, dpi = 300)
-
-
+ggsave("figures/pca_life_expectancy.png", pca_plot, width = 7, height = 5, dpi = 300)

@@ -1,12 +1,8 @@
-#data distribution
+library(tidyverse)
+library(janitor)
 
-data <- read_csv("source_data/county_health_rankings_2025.csv") |> clean_names()
+data <- read_csv("source_data/county_health_rankings_2025.csv", show_col_types = F) |> clean_names()
 
-data |> head()
-
-names(data)
-
-dim(data)
 colSums(is.na(data)) |> sort(decreasing = TRUE)
 sum(duplicated(data))
 n_distinct(data)
